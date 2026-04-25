@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f5f5f4" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>Himachal Himalayas — trip plan</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg: #f5f5f4;
+      --panel: #ffffff;
+      --text: #292524;
+      --text-strong: #1c1917;
+      --muted: #78716c;
+      --accent: #0d9488;
+      --accent-dim: #ccfbf1;
+      --accent-border: #99f6e4;
+      --day-pill: #fafaf9;
+      --border: #e7e5e4;
+      --shadow: rgba(28, 25, 23, 0.06);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      min-height: 100dvh;
+      margin: 0;
+      font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    .layout {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 100dvh;
+      animation: layoutFade 0.45s ease-out;
+    }
+    @keyframes layoutFade {
+      from { opacity: 0.92; }
+      to { opacity: 1; }
+    }
+    header {
+      flex-shrink: 0;
+      padding: 0.75rem 1rem;
+      padding-top: max(0.75rem, env(safe-area-inset-top));
+      padding-left: max(1rem, env(safe-area-inset-left));
+      padding-right: max(1rem, env(safe-area-inset-right));
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 0 var(--shadow);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    header h1 { margin: 0; font-size: clamp(1rem, 4vw, 1.15rem); font-weight: 600; letter-spacing: 0.02em; }
+    .main {
+      flex: 1 1 auto;
+      display: flex;
+      min-height: 0;
+      min-height: min(60vh, 560px);
+    }
+    .sidebar {
+      width: min(380px, 100%); flex-shrink: 0;
+      background: var(--panel); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; max-height: 45vh;
+    }
+    @media (min-width: 900px) {
+      .sidebar { max-height: none; }
+    }
+    .day-toolbar {
+      padding: 0.75rem; border-bottom: 1px solid var(--border);
+      overflow-x: auto; flex-shrink: 0;
+    }
+    .day-toolbar label { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.5rem; }
+    .day-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .day-chips button {
+      border: 1px solid var(--border); background: var(--day-pill); color: var(--text);
+      padding: 0.35rem 0.55rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.18s ease, box-shadow 0.2s ease;
+    }
+    .day-chips button:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .day-chips button:active { transform: translateY(0); }
+    .day-chips button.active {
+      background: var(--accent-dim); border-color: var(--accent); font-weight: 600;
+      box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.25), 0 4px 12px rgba(13, 148, 136, 0.12);
+      animation: chipActivate 0.45s ease-out;
+    }
+    @keyframes chipActivate {
+      0% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.35); }
+      60% { box-shadow: 0 0 0 6px rgba(13, 148, 136, 0.08); }
+      100% { box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.25), 0 4px 12px rgba(13, 148, 136, 0.12); }
+    }
+    .day-list { flex: 1; overflow-y: auto; padding: 0.75rem; scroll-behavior: smooth; }
+    .day-section { margin-bottom: 1rem; }
+    .day-section h3 { margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--accent); }
+    .itinerary-day {
+      margin-bottom: 1.35rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);
+      animation: itineraryEnter 0.42s ease backwards;
+    }
+    .itinerary-day:nth-child(1) { animation-delay: 0.03s; }
+    .itinerary-day:nth-child(2) { animation-delay: 0.07s; }
+    .itinerary-day:nth-child(3) { animation-delay: 0.11s; }
+    .itinerary-day:nth-child(4) { animation-delay: 0.15s; }
+    .itinerary-day:nth-child(5) { animation-delay: 0.19s; }
+    .itinerary-day:nth-child(6) { animation-delay: 0.23s; }
+    @keyframes itineraryEnter {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .itinerary-day:last-child { border-bottom: none; }
+    .itinerary-day h3 { margin: 0 0 0.6rem; font-size: 0.95rem; color: var(--accent); }
+    .route-leg-meta {
+      font-size: 0.78rem; line-height: 1.45; color: var(--text);
+      background: var(--accent-dim); border: 1px solid var(--accent-border);
+      border-radius: 8px; padding: 0.5rem 0.65rem; margin-bottom: 0.65rem;
+    }
+    .route-leg-meta .route-leg-main { color: var(--text-strong); font-weight: 600; }
+    .route-leg-meta .route-leg-note { margin-top: 0.35rem; font-size: 0.72rem; color: var(--muted); line-height: 1.4; }
+    .itinerary-body {
+      font-size: 0.82rem; line-height: 1.58; color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .itinerary-body strong.place-name,
+    .modal-prose strong.place-name {
+      font-weight: 650;
+      color: var(--text-strong);
+    }
+    .itinerary-places { margin-top: 0.85rem; font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
+    .place-link {
+      background: none; border: none; color: var(--accent); cursor: pointer;
+      padding: 0; font: inherit; text-decoration: underline; text-underline-offset: 2px;
+    }
+    .place-link:hover { color: #0f766e; }
+    .map-wrap { flex: 1; position: relative; min-height: 280px; }
+    #map { width: 100%; height: 100%; min-height: 280px; background: #e7e5e4; }
+    .leaflet-container { background: #d6d3d1; font-family: inherit; }
+    /* Permanent place names (day / preset selected) — not hover popups */
+    .leaflet-tooltip.place-label-tooltip {
+      background: #ffffff;
+      color: var(--text-strong);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      box-shadow: 0 2px 10px rgba(28, 25, 23, 0.08);
+      pointer-events: none;
+    }
+    .leaflet-tooltip.place-label-tooltip::before { display: none; }
+    .leaflet-control-layers { background: rgba(255, 255, 255, 0.96); color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 2px 12px var(--shadow); }
+    .leaflet-control-layers-list { color: var(--text); }
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0; z-index: 20000;
+      background: rgba(0, 0, 0, 0); align-items: center; justify-content: center; padding: 1rem;
+      transition: background 0.28s ease;
+    }
+    .modal-backdrop.open {
+      display: flex;
+      background: rgba(28, 25, 23, 0.4);
+      animation: backdropIn 0.3s ease forwards;
+    }
+    @keyframes backdropIn {
+      from { background: rgba(28, 25, 23, 0); }
+      to { background: rgba(28, 25, 23, 0.4); }
+    }
+    .modal {
+      background: var(--panel); border-radius: 12px; max-width: 600px; width: 100%;
+      max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;
+      border: 1px solid var(--border); box-shadow: 0 24px 48px rgba(28, 25, 23, 0.12);
+    }
+    .modal-backdrop.open .modal {
+      animation: modalPop 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    @keyframes modalPop {
+      0% { transform: scale(0.94) translateY(16px); opacity: 0; }
+      100% { transform: scale(1) translateY(0); opacity: 1; }
+    }
+    .gallery-shell { position: relative; background: #f5f5f4; }
+    .gallery-viewport {
+      touch-action: pan-y; user-select: none; cursor: grab;
+      min-height: 200px; max-height: min(42vh, 320px); display: flex; align-items: center; justify-content: center;
+    }
+    .gallery-viewport:active { cursor: grabbing; }
+    .gallery-shell img {
+      width: 100%; height: auto; max-height: min(42vh, 320px); object-fit: contain;
+      background: #f5f5f4; display: block; pointer-events: none;
+    }
+    .gallery-nav {
+      position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
+      width: 40px; height: 40px; border: 1px solid var(--border); border-radius: 50%;
+      background: rgba(255, 255, 255, 0.95); color: var(--text-strong); font-size: 1.5rem; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; padding: 0 0 2px 0;
+      box-shadow: 0 2px 8px var(--shadow);
+    }
+    .gallery-nav:hover { background: rgba(13, 148, 136, 0.35); }
+    .gallery-nav:disabled { opacity: 0.25; cursor: default; }
+    .gallery-prev { left: 0.5rem; }
+    .gallery-next { right: 0.5rem; }
+    .gallery-meta {
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+      padding: 0.35rem 0.5rem; font-size: 0.75rem; color: var(--muted);
+      background: rgba(245, 245, 244, 0.95);
+      border-top: 1px solid var(--border);
+    }
+    .gallery-dots { display: flex; gap: 0.35rem; align-items: center; }
+    .gallery-dots button {
+      width: 8px; height: 8px; padding: 0; border: none; border-radius: 50%;
+      background: #d6d3d1; cursor: pointer;
+    }
+    .gallery-dots button.active { background: var(--accent); transform: scale(1.15); }
+    .modal-body { padding: 1rem 1.1rem; overflow-y: auto; max-height: min(52vh, 440px); }
+    .modal-section-title {
+      font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--accent);
+      margin: 0 0 0.4rem; font-weight: 600;
+    }
+    .modal-section-title.spaced { margin-top: 1rem; }
+    .modal-prose {
+      font-size: 0.82rem; line-height: 1.55; color: var(--text); white-space: pre-wrap; word-break: break-word;
+      margin: 0 0 0.35rem;
+    }
+    .modal-body h2 { margin: 0 0 0.35rem; font-size: 1.15rem; }
+    .modal-meta { font-size: 0.8rem; color: var(--accent); margin-bottom: 0.75rem; }
+    .modal-body p { margin: 0 0 0.65rem; font-size: 0.9rem; line-height: 1.5; color: var(--text); }
+    .modal-close {
+      position: absolute; top: 0.75rem; right: 0.75rem; z-index: 2;
+      width: 36px; height: 36px; border: none; border-radius: 8px;
+      background: rgba(255, 255, 255, 0.9); color: var(--text); border: 1px solid var(--border); font-size: 1.25rem; cursor: pointer; line-height: 1;
+    }
+    .modal-wrap { position: relative; }
+    .img-credit { font-size: 0.7rem; color: var(--muted); margin-top: 0.5rem; }
+
+    /* Focused route segment — glow on SVG path (Leaflet) */
+    .leaflet-overlay-pane svg path.trip-route-focus {
+      filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 8px rgba(13, 148, 136, 0.85)) drop-shadow(0 0 16px rgba(13, 148, 136, 0.35));
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .trip-pin-emphasis .pin-core {
+      animation: pinGlow 2.2s ease-in-out infinite;
+    }
+    @keyframes pinGlow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.45), 0 2px 8px rgba(0, 0, 0, 0.15); }
+      50% { box-shadow: 0 0 0 10px rgba(13, 148, 136, 0), 0 2px 8px rgba(0, 0, 0, 0.15); }
+    }
+
+    /* —— Mobile / narrow screens —— */
+    @media (max-width: 719px) {
+      .main {
+        flex-direction: column;
+        min-height: 0;
+      }
+      .map-wrap {
+        order: -1;
+        flex: 0 0 auto;
+        width: 100%;
+        height: clamp(240px, 42vh, 400px);
+        min-height: clamp(240px, 42vh, 400px);
+      }
+      #map {
+        height: 100%;
+        min-height: 100%;
+      }
+      .sidebar {
+        width: 100%;
+        max-height: none;
+        border-right: none;
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      .day-toolbar {
+        padding: 0.65rem 0.75rem;
+        padding-bottom: max(0.65rem, env(safe-area-inset-bottom));
+        -webkit-overflow-scrolling: touch;
+      }
+      .day-toolbar label {
+        font-size: 0.68rem;
+        line-height: 1.35;
+      }
+      .day-chips {
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+      .day-chips button {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 0.45rem 0.6rem;
+        font-size: 0.8rem;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .day-list {
+        -webkit-overflow-scrolling: touch;
+        padding: 0.65rem 0.75rem;
+        padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+      }
+      .leaflet-control-zoom a {
+        min-width: 36px;
+        min-height: 36px;
+        line-height: 36px;
+      }
+      .modal-backdrop {
+        padding: 0.5rem;
+        padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+        align-items: flex-end;
+      }
+      .modal-wrap {
+        max-width: 100% !important;
+        width: 100% !important;
+        max-height: min(92dvh, 100%);
+      }
+      .modal {
+        max-height: min(92dvh, 100%);
+        border-radius: 12px 12px 0 0;
+      }
+      .modal-body {
+        max-height: min(40vh, 280px);
+      }
+      .gallery-viewport {
+        max-height: min(38vh, 280px);
+      }
+      .gallery-shell img {
+        max-height: min(38vh, 280px);
+      }
+      .modal-close {
+        min-width: 44px;
+        min-height: 44px;
+      }
+
+      /* Big map when a single day is selected — itinerary collapsed */
+      .layout.mobile-map-focus .main {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+        max-height: calc(100dvh - 3.5rem - env(safe-area-inset-top, 0px));
+        height: calc(100dvh - 3.5rem - env(safe-area-inset-top, 0px));
+      }
+      .layout.mobile-map-focus .day-list {
+        display: none !important;
+      }
+      .layout.mobile-map-focus .map-wrap {
+        flex: 1 1 auto;
+        width: 100%;
+        min-height: 0;
+        height: auto;
+        max-height: none;
+      }
+      .layout.mobile-map-focus .sidebar {
+        flex: 0 0 auto;
+        max-height: none;
+      }
+      .layout.mobile-map-focus .day-toolbar label {
+        display: none;
+      }
+      .mobile-itinerary-toggle {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        margin-top: 0.5rem;
+        padding: 0.55rem 0.75rem;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--text-strong);
+        background: var(--accent-dim);
+        border: 1px solid var(--accent-border);
+        border-radius: 8px;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        min-height: 44px;
+      }
+      .layout.mobile-map-focus .mobile-itinerary-toggle {
+        display: flex;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .layout { animation: none; }
+      .day-chips button, .day-chips button.active { transition: none; animation: none; }
+      .day-chips button.active { box-shadow: none; }
+      .itinerary-day { animation: none; }
+      .modal-backdrop.open { animation: none; background: rgba(28, 25, 23, 0.4); }
+      .modal-backdrop.open .modal { animation: none; }
+      .trip-pin-emphasis .pin-core { animation: none; }
+      .leaflet-overlay-pane svg path.trip-route-focus { filter: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <header>
+      <h1>Himachal Himalayas</h1>
+    </header>
+    <div class="main">
+      <aside class="sidebar">
+        <div class="day-toolbar">
+          <label>Pick a day — itinerary + typical km/time below · map shows simplified route traces</label>
+          <div class="day-chips" id="dayChips"></div>
+          <button type="button" class="mobile-itinerary-toggle" id="mobileItineraryToggle" aria-controls="dayList">
+            Show full itinerary
+          </button>
+        </div>
+        <div class="day-list" id="dayList"></div>
+      </aside>
+      <div class="map-wrap">
+        <div id="map"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modal" role="dialog" aria-modal="true">
+    <div class="modal-wrap" style="position:relative;max-width:600px;width:100%;">
+      <button type="button" class="modal-close" id="modalClose" aria-label="Close">&times;</button>
+      <div class="modal">
+        <div class="gallery-shell">
+          <button type="button" class="gallery-nav gallery-prev" id="galleryPrev" aria-label="Previous photo">‹</button>
+          <div class="gallery-viewport" id="galleryViewport" role="img" aria-live="polite">
+            <img id="modalImg" alt="" />
+          </div>
+          <button type="button" class="gallery-nav gallery-next" id="galleryNext" aria-label="Next photo">›</button>
+          <div class="gallery-meta" id="galleryMeta">
+            <span id="galleryCounter"></span>
+            <span class="gallery-dots" id="galleryDots" aria-hidden="true"></span>
+          </div>
+        </div>
+        <div class="modal-body">
+          <h2 id="modalTitle"></h2>
+          <div class="modal-meta" id="modalMeta"></div>
+          <div class="modal-section-title">About this place</div>
+          <div id="modalPlaceDetail" class="modal-prose"></div>
+          <div class="modal-section-title spaced">Full day itinerary</div>
+          <div id="modalDayPlan" class="modal-prose"></div>
+          <p class="img-credit" id="modalCredit"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="itinerary.js"></script>
+  <script src="place-details.js"></script>
+  <script src="place-photos/manifest.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const DAY_COLORS = {
+      1: "#94a3b8",
+      2: "#38bdf8",
+      3: "#22d3ee",
+      4: "#34d399",
+      5: "#a3e635",
+      6: "#fbbf24",
+      7: "#fb923c",
+      8: "#f472b6",
+      9: "#c084fc",
+      10: "#818cf8",
+      11: "#60a5fa",
+      12: "#94a3b8"
+    };
+
+    const ROUTES = {
+      2: [
+        [30.9331, 74.6197],
+        [31.55, 74.85],
+        [31.6209, 74.8765],
+        [31.6047, 74.5735],
+        [31.6209, 74.8765],
+        [32.2643, 75.6442]
+      ],
+      3: [
+        [32.2643, 75.6442],
+        [32.45, 75.9],
+        [32.5392, 75.9708],
+        [32.5128, 76.0248]
+      ],
+      4: [
+        [32.5128, 76.0248],
+        [32.5465, 76.002],
+        [32.5463, 76.0641],
+        [32.35, 76.6],
+        [32.2, 77.05],
+        [32.132, 77.268]
+      ],
+      5: [
+        [32.132, 77.268],
+        [32.14, 77.26],
+        [32.125, 77.275],
+        [32.132, 77.268]
+      ],
+      6: [
+        [32.132, 77.268],
+        [32.25, 77.2],
+        [32.339, 77.138],
+        [32.342, 77.125]
+      ],
+      7: [
+        [32.342, 77.125],
+        [32.28, 77.14],
+        [32.1989, 77.1575],
+        [32.342, 77.125]
+      ],
+      8: [
+        [32.342, 77.125],
+        [32.339, 77.138],
+        [32.05, 77.12],
+        [32.132, 77.268]
+      ],
+      9: [
+        [32.132, 77.268],
+        [32.22, 77.22],
+        [32.2396, 77.1887],
+        [32.252, 77.17],
+        [32.132, 77.268]
+      ],
+      10: [
+        [32.132, 77.268],
+        [32.08, 77.29],
+        [32.0102, 77.3151],
+        [32.0277, 77.3132],
+        [32.024, 77.318],
+        [32.132, 77.268]
+      ],
+      11: [
+        [32.0102, 77.3151],
+        [31.85, 76.85],
+        [31.4, 76.2],
+        [31.0, 75.5],
+        [30.9331, 74.6197]
+      ]
+    };
+
+    /**
+     * Typical driving distance & time for each road day (planning ballpark — traffic, stops & season vary).
+     * Map lines are simplified polylines between waypoints, not surveyed highway centreline geometry.
+     */
+    const ROUTE_LEG_META = {
+      1: {
+        path: "Ahmedabad → Amritsar sector (train 19223)",
+        km: "—",
+        time: "~23 h (train)",
+        note: "No driving trace — pin marks Sabarmati BG reporting area."
+      },
+      2: {
+        path: "Firozpur Cantt → Amritsar → Wagah → Pathankot",
+        km: "~250–320 km (road)",
+        time: "Full day",
+        note: "Deboard Firozpur Cantt; vehicles for city + border; night at Pathankot."
+      },
+      3: {
+        path: "Pathankot → Dalhousie → Kalatop camp",
+        km: "~80–100 km",
+        time: "~3–5 h + sightseeing",
+        note: "Hill roads; local taxis for Dalhousie circuit."
+      },
+      4: {
+        path: "Dainkund → Khajjiar → overnight bus to Manali",
+        km: "~50–70 km (local) + night road",
+        time: "Full day + overnight",
+        note: "Late-evening departure for Manali; sleep on vehicle."
+      },
+      5: {
+        path: "Invincible campsite (Ghud Daur, near Naggar)",
+        km: "—",
+        time: "Arrival ~08:00 · acclimatisation day",
+        note: "Briefing, games, luggage deposit — no major road leg."
+      },
+      6: {
+        path: "Drive to Gulaba → trek to Raoli Kholi ABC",
+        km: "~40–55 km drive + trek",
+        time: "~3 h drive + 4–5 h trek",
+        note: "Mar–Apr: route may use Rani Sui Lake — confirm with guides."
+      },
+      7: {
+        path: "Raoli Kholi ↔ Bhrigu Lake (day trek)",
+        km: "Trek only",
+        time: "3–4 h up + descent",
+        note: "~14,000 ft — pace for altitude."
+      },
+      8: {
+        path: "Trek down Gulaba → rafting → Manali campsite",
+        km: "Trek + short transfers",
+        time: "~4–5 h trek + rafting slot",
+        note: "Water sports closed 15 Jul–15 Sep in Himachal."
+      },
+      9: {
+        path: "Manali sightseeing & paragliding (local)",
+        km: "~30–50 km",
+        time: "Full day",
+        note: "Adventure optional; monsoon ban mid-Jul–mid-Sep."
+      },
+      10: {
+        path: "Kasol · Manikaran · Chalal (Parvati Valley)",
+        km: "~60–90 km return from camp",
+        time: "Full day + evening transfer",
+        note: "Evening start of return toward Firozpur/Delhi sector."
+      },
+      11: {
+        path: "Return leg to Firozpur or Rupnagar (train options)",
+        km: "—",
+        time: "Overnight travel + buffer day",
+        note: "19224 from Firozpur Cantt 15:55 or 19412 from Rupnagar 16:00 — food/stay often not included."
+      },
+      12: {
+        path: "Train → Ahmedabad (arrival)",
+        km: "—",
+        time: "Per ticket",
+        note: "No road polyline — confirm arrival station on PNR."
+      }
+    };
+
+    /**
+     * Single-day chip: also show a name label on “bridge” stops — same overnight / handover
+     * as the end of day (N−1) and start of day (N). Keys = focused day number.
+     */
+    var FOCUS_BRIDGE_LABELS = {
+      3: ["d2d"],
+      4: ["d3b"],
+      5: ["d4b"],
+      6: ["d5"],
+      7: ["d6b"],
+      8: ["d6b"],
+      9: ["d8b"],
+      10: ["d9c"],
+      11: ["d10c"]
+    };
+
+    /* Photos: drop files under place-photos/day-NN/<place_id>/ then run: python3 scan_place_photos.py */
+    /* Optional extraGallery: [{ local: "…", remote: null }, …] appended after folder images */
+    const PLACES = [
+      { id: "d1", day: 1, name: "Sabarmati BG — train 19223", summary: "Report 09:30 · dep 10:25 toward Amritsar sector.", lat: 23.0719, lng: 72.5814, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/7/7d/Sabarmati_Riverfront_Ahmedabad.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d2a", day: 2, name: "Firozpur Cantt", summary: "Deboard here; vehicles to Amritsar (~2 h).", lat: 30.9331, lng: 74.6197, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/1/1c/Pathankot_Junction_railway_station.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d2b", day: 2, name: "Amritsar — Golden Temple & city", summary: "Golden Temple, Jallianwala Bagh, Punjabi cuisine.", lat: 31.6209, lng: 74.8765, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/6/6e/Harmandir_Sahib_Amritsar.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d2c", day: 2, name: "Wagah Border", summary: "Retreat ceremony ~16:00–17:00 — arrive early.", lat: 31.6047, lng: 74.5735, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/6/6e/Harmandir_Sahib_Amritsar.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d2d", day: 2, name: "Pathankot — night stay", summary: "Hotel near railway station after Amritsar circuit.", lat: 32.2643, lng: 75.6442, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/1/1c/Pathankot_Junction_railway_station.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d3a", day: 3, name: "Dalhousie", summary: "Gandhi Chowk, church, Panchpula, Chamera, Rock Garden.", lat: 32.5392, lng: 75.9708, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/8/8c/Dalhousie_Himachal_Pradesh_India.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d3b", day: 3, name: "Kalatop advance camp", summary: "Ridge camp, views, evening activities, dinner.", lat: 32.5128, lng: 76.0248, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/8/8c/Dalhousie_Himachal_Pradesh_India.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d4a", day: 4, name: "Dainkund Peak", summary: "Highest viewpoint of the Dalhousie area — 360° views.", lat: 32.5465, lng: 76.002, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/8/8c/Dalhousie_Himachal_Pradesh_India.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d4b", day: 4, name: "Khajjiar", summary: "Mini Switzerland meadow — then overnight to Manali.", lat: 32.5463, lng: 76.0641, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/8/8c/Dalhousie_Himachal_Pradesh_India.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d5", day: 5, name: "Invincible campsite (Ghud Daur)", summary: "Near Naggar — arrival ~08:00, acclimatisation day.", lat: 32.132, lng: 77.268, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/a/a2/Naggar_Castle.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d6a", day: 6, name: "Gulaba (roadhead)", summary: "~3 h drive from camp — start of trek to ABC.", lat: 32.339, lng: 77.138, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/3/39/Solang_Valley.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d6b", day: 6, name: "Raoli Kholi ABC", summary: "Advanced base camp — nights before/after Bhrigu.", lat: 32.342, lng: 77.125, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/f/f6/Chandra_Taal.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d7", day: 7, name: "Bhrigu Lake", summary: "~14,000 ft day trek from Raoli Kholi.", lat: 32.1989, lng: 77.1575, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/f/f6/Chandra_Taal.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d8a", day: 8, name: "Gulaba (descent)", summary: "Morning trek down — pack lunch.", lat: 32.339, lng: 77.138, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/3/39/Solang_Valley.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d8b", day: 8, name: "Beas river rafting", summary: "Rafting slot after Gulaba — then camp night.", lat: 32.012, lng: 77.128, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/3/39/Solang_Valley.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d9a", day: 9, name: "Paragliding (valley)", summary: "Tandem flight day — subject to monsoon ban.", lat: 32.22, lng: 77.22, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/3/39/Solang_Valley.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d9b", day: 9, name: "Hadimba Temple", summary: "Wooden temple in deodar forest.", lat: 32.2396, lng: 77.1887, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/a/a8/Hidimba_Devi_Temple_Manali.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d9c", day: 9, name: "Manu · Vashisht · Mall Road", summary: "Manu Temple, hot springs, evening Mall Road.", lat: 32.252, lng: 77.17, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/d/de/Mall_Road%2C_Manali.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d10a", day: 10, name: "Kasol", summary: "Parvati River, cafés, market.", lat: 32.0102, lng: 77.3151, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/2/25/Manikaran_Sahib_Gurudwara.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d10b", day: 10, name: "Manikaran Sahib", summary: "Hot springs and gurdwara.", lat: 32.0277, lng: 77.3132, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/2/25/Manikaran_Sahib_Gurudwara.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d10c", day: 10, name: "Chalal", summary: "Short walk from Kasol — quiet forest trails.", lat: 32.024, lng: 77.318, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/2/25/Manikaran_Sahib_Gurudwara.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d11a", day: 11, name: "Firozpur Cantt — train 19224", summary: "Option 1 · dep 15:55 to Ahmedabad sector.", lat: 30.9331, lng: 74.6197, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/1/1c/Pathankot_Junction_railway_station.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d11b", day: 11, name: "Rupnagar — train 19412", summary: "Option 2 · dep 16:00 from Rupnagar.", lat: 30.9664, lng: 76.5331, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/9/9f/Chandigarh_railway_station.jpg", imageCredit: "Wikimedia Commons" },
+      { id: "d12", day: 12, name: "Ahmedabad — arrival", summary: "End of tour — confirm station on your ticket.", lat: 23.0225, lng: 72.5714, remoteImage: "https://upload.wikimedia.org/wikipedia/commons/7/7d/Sabarmati_Riverfront_Ahmedabad.jpg", imageCredit: "Wikimedia Commons" }
+    ];
+
+    var map = null;
+    var polylineByDay = {};
+    var markers = {};
+    var routeGroup = null;
+    var markerGroup = null;
+    var activeDays = null;
+    var selectedFocusDay = null;
+    var focusRouteAnimFrame = null;
+    var focusRoutePhase = 0;
+    /** Fallback when bounds are empty or the map container had zero size during fit. */
+    var DEFAULT_MAP_CENTER = [31.9, 76.4];
+    var DEFAULT_MAP_ZOOM = 7;
+
+    function invalidateMapSize() {
+      if (map) map.invalidateSize({ animate: false });
+    }
+
+    /** After sidebar/layout changes, Leaflet needs a real container size before fitBounds. */
+    function scheduleFitMap() {
+      if (!map) return;
+      map.invalidateSize({ animate: false });
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          map.invalidateSize({ animate: false });
+          fitMapToView();
+          map.invalidateSize({ animate: false });
+        });
+      });
+    }
+
+    function syncMobileMapFocus() {
+      var layout = document.querySelector(".layout");
+      if (!layout) return;
+      var narrow = window.matchMedia("(max-width: 719px)").matches;
+      if (narrow && selectedFocusDay !== null) {
+        layout.classList.add("mobile-map-focus");
+      } else {
+        layout.classList.remove("mobile-map-focus");
+      }
+    }
+
+    function stopFocusRouteAnim() {
+      if (focusRouteAnimFrame) {
+        cancelAnimationFrame(focusRouteAnimFrame);
+        focusRouteAnimFrame = null;
+      }
+    }
+
+    function prefersReducedMotion() {
+      return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    }
+
+    function startFocusRouteAnim(pl) {
+      stopFocusRouteAnim();
+      if (!pl || !map || prefersReducedMotion()) return;
+      focusRoutePhase = 0;
+      function tick() {
+        if (!pl._map || !polylineByDay[selectedFocusDay] || pl !== polylineByDay[selectedFocusDay]) {
+          stopFocusRouteAnim();
+          return;
+        }
+        focusRoutePhase = (focusRoutePhase + 1.15) % 36;
+        try {
+          pl.setStyle({ dashArray: "16 12", dashOffset: String(-focusRoutePhase) });
+        } catch (e) {
+          stopFocusRouteAnim();
+          return;
+        }
+        focusRouteAnimFrame = requestAnimationFrame(tick);
+      }
+      focusRouteAnimFrame = requestAnimationFrame(tick);
+    }
+
+    function escapeHtml(s) {
+      if (s == null || s === "") return "";
+      var d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function placeholderImageUrl(title) {
+      var t = title.length > 36 ? title.slice(0, 33) + "…" : title;
+      return "https://placehold.co/800x480/f5f5f4/57534e/png?font=source-sans-pro&text=" + encodeURIComponent(t);
+    }
+
+    /** Slides from PLACE_PHOTO_MANIFEST (scan_place_photos.py) + optional extraGallery. */
+    var galleryState = { place: null, slides: [], index: 0, touchStartX: null };
+
+    function getSlides(place) {
+      var slides = [];
+      var manifest = typeof PLACE_PHOTO_MANIFEST !== "undefined" && PLACE_PHOTO_MANIFEST ? PLACE_PHOTO_MANIFEST : {};
+      var paths = manifest[place.id];
+      if (Array.isArray(paths) && paths.length > 0) {
+        for (var i = 0; i < paths.length; i++) {
+          slides.push({
+            local: paths[i],
+            remote: i === 0 ? (place.remoteImage || null) : null
+          });
+        }
+      } else if (place.remoteImage) {
+        slides.push({ local: place.remoteImage, remote: null });
+      }
+      if (Array.isArray(place.extraGallery)) {
+        for (var j = 0; j < place.extraGallery.length; j++) {
+          slides.push(place.extraGallery[j]);
+        }
+      }
+      return slides;
+    }
+
+    function updateGalleryChrome() {
+      var slides = galleryState.slides;
+      var n = slides.length;
+      var idx = galleryState.index;
+      var prev = document.getElementById("galleryPrev");
+      var next = document.getElementById("galleryNext");
+      var counter = document.getElementById("galleryCounter");
+      var dots = document.getElementById("galleryDots");
+      var meta = document.getElementById("galleryMeta");
+      if (n <= 1) {
+        prev.style.display = "none";
+        next.style.display = "none";
+        counter.textContent = n === 1 ? "1 photo" : "No photos";
+        dots.innerHTML = "";
+        meta.style.display = n === 0 ? "none" : "flex";
+        return;
+      }
+      meta.style.display = "flex";
+      prev.style.display = "flex";
+      next.style.display = "flex";
+      prev.disabled = false;
+      next.disabled = false;
+      counter.textContent = "Photo " + (idx + 1) + " / " + n + " · swipe";
+      dots.innerHTML = "";
+      for (var d = 0; d < n; d++) {
+        (function (j) {
+          var b = document.createElement("button");
+          b.type = "button";
+          b.className = j === idx ? "active" : "";
+          b.setAttribute("aria-label", "Photo " + (j + 1));
+          b.addEventListener("click", function () {
+            galleryState.index = j;
+            showGallerySlide();
+          });
+          dots.appendChild(b);
+        })(d);
+      }
+    }
+
+    function showGallerySlide() {
+      var slides = galleryState.slides;
+      var place = galleryState.place;
+      var idx = galleryState.index;
+      var img = document.getElementById("modalImg");
+      if (!place || slides.length === 0) {
+        img.style.display = "none";
+        img.removeAttribute("src");
+        updateGalleryChrome();
+        return;
+      }
+      if (idx < 0) galleryState.index = idx = 0;
+      if (idx >= slides.length) galleryState.index = idx = slides.length - 1;
+      var slide = slides[idx];
+      img.style.display = "block";
+      img.alt = place.name + " — " + (idx + 1);
+      delete img.dataset.fallbackStep;
+      img.onerror = function () {
+        if (slide.remote && img.dataset.fallbackStep !== "remote") {
+          img.dataset.fallbackStep = "remote";
+          img.src = slide.remote;
+          document.getElementById("modalCredit").textContent =
+            "Photo: " + (place.imageCredit || "Web") + " (online)";
+          return;
+        }
+        img.onerror = null;
+        img.src = placeholderImageUrl(place.name);
+        document.getElementById("modalCredit").textContent =
+          "Add images under place-photos/day-NN/<place_id>/ then run: python3 scan_place_photos.py";
+      };
+      img.src = slide.local;
+      document.getElementById("modalCredit").textContent =
+        "Photo: " + (place.imageCredit || "Web") + " · swipe or ← →";
+      updateGalleryChrome();
+    }
+
+    function galleryGo(delta) {
+      var n = galleryState.slides.length;
+      if (n === 0) return;
+      galleryState.index = (galleryState.index + delta + n * 1000) % n;
+      showGallerySlide();
+    }
+
+    function openModal(place) {
+      var m = document.getElementById("modal");
+      document.getElementById("modalTitle").textContent = place.name;
+      document.getElementById("modalMeta").textContent = "Day " + place.day + " · " + place.lat.toFixed(4) + ", " + place.lng.toFixed(4);
+      var about =
+        typeof PLACE_DETAILS !== "undefined" && PLACE_DETAILS[place.id]
+          ? PLACE_DETAILS[place.id]
+          : escapeHtml(place.summary || "");
+      document.getElementById("modalPlaceDetail").innerHTML = about;
+      var dayPlan =
+        typeof DAY_ITINERARY !== "undefined" && DAY_ITINERARY[place.day]
+          ? DAY_ITINERARY[place.day]
+          : "";
+      document.getElementById("modalDayPlan").innerHTML = dayPlan || "";
+      galleryState.place = place;
+      galleryState.slides = getSlides(place);
+      galleryState.index = 0;
+      galleryState.touchStartX = null;
+      showGallerySlide();
+      m.classList.add("open");
+    }
+
+    function closeModal() {
+      document.getElementById("modal").classList.remove("open");
+      galleryState.place = null;
+      galleryState.slides = [];
+    }
+
+    function onGalleryKeydown(e) {
+      if (!document.getElementById("modal").classList.contains("open")) return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        galleryGo(-1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        galleryGo(1);
+      }
+    }
+
+    function placeIcon(color, emphasize) {
+      var s = emphasize ? 18 : 14;
+      var half = s / 2;
+      var inner =
+        '<div class="pin-core" style="width:' +
+        s +
+        "px;height:" +
+        s +
+        "px;border-radius:50%;background:" +
+        color +
+        ';border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.6);"></div>';
+      return L.divIcon({
+        className: "trip-pin" + (emphasize ? " trip-pin-emphasis" : ""),
+        html: inner,
+        iconSize: [s, s],
+        iconAnchor: [half, half]
+      });
+    }
+
+    function buildPolylines() {
+      Object.keys(ROUTES).forEach(function (dayStr) {
+        var day = parseInt(dayStr, 10);
+        var pts = ROUTES[day].map(function (c) { return [c[0], c[1]]; });
+        var col = DAY_COLORS[day] || "#888";
+        var pl = L.polyline(pts, {
+          color: col,
+          weight: 4,
+          opacity: 0.55,
+          lineJoin: "round",
+          lineCap: "round"
+        });
+        pl._tripDay = day;
+        polylineByDay[day] = pl;
+        routeGroup.addLayer(pl);
+      });
+    }
+
+    function buildMarkers() {
+      PLACES.forEach(function (p) {
+        var col = DAY_COLORS[p.day] || "#94a3b8";
+        var m = L.marker([p.lat, p.lng], { icon: placeIcon(col, false) });
+        m.on("click", function () { openModal(p); });
+        markers[p.id] = m;
+      });
+    }
+
+    /** Show pinned labels on markers when a day or preset is chosen; hide for “All days” (too busy). */
+    function showPinnedPlaceLabels() {
+      return activeDays !== null;
+    }
+
+    /** Single-day chip: labels for that day’s stops + bridge pins (same place as previous day’s end). */
+    function shouldShowPinnedLabel(p) {
+      if (selectedFocusDay === null) return true;
+      if (p.day === selectedFocusDay) return true;
+      var bridge = FOCUS_BRIDGE_LABELS[selectedFocusDay];
+      return !!(bridge && bridge.indexOf(p.id) !== -1);
+    }
+
+    function placeVisibleForFilter(p) {
+      if (activeDays === null) return true;
+      if (selectedFocusDay !== null) return p.day <= selectedFocusDay;
+      return activeDays.indexOf(p.day) !== -1;
+    }
+
+    function syncMarkers() {
+      markerGroup.clearLayers();
+      PLACES.forEach(function (p) {
+        if (!placeVisibleForFilter(p)) return;
+        var m = markers[p.id];
+        var col = DAY_COLORS[p.day] || "#94a3b8";
+        var emphasize = selectedFocusDay !== null && p.day === selectedFocusDay;
+        m.setIcon(placeIcon(col, emphasize));
+        m.unbindTooltip();
+        if (showPinnedPlaceLabels() && shouldShowPinnedLabel(p)) {
+          m.bindTooltip(p.name, {
+            permanent: true,
+            direction: "top",
+            offset: [0, emphasize ? -12 : -10],
+            className: "place-label-tooltip",
+            interactive: false
+          });
+        }
+        markerGroup.addLayer(m);
+      });
+    }
+
+    function updateRouteStyles() {
+      stopFocusRouteAnim();
+      Object.keys(polylineByDay).forEach(function (ds) {
+        var d = parseInt(ds, 10);
+        var pl = polylineByDay[d];
+        var col = DAY_COLORS[d] || "#64748b";
+
+        if (activeDays === null) {
+          routeGroup.addLayer(pl);
+          pl.setStyle({
+            color: col,
+            weight: 4,
+            opacity: 0.55,
+            className: "",
+            dashArray: null,
+            dashOffset: null
+          });
+          return;
+        }
+
+        if (selectedFocusDay !== null) {
+          var showCumulative = d >= 2 && d <= selectedFocusDay;
+          if (!showCumulative) {
+            routeGroup.removeLayer(pl);
+            return;
+          }
+          routeGroup.addLayer(pl);
+          var isFocus = d === selectedFocusDay;
+          pl.setStyle({
+            color: col,
+            weight: isFocus ? 16 : 6,
+            opacity: isFocus ? 1 : 0.48,
+            lineCap: "round",
+            lineJoin: "round",
+            className: isFocus ? "trip-route-focus" : "",
+            dashArray: isFocus ? "16 12" : null,
+            dashOffset: isFocus ? "0" : null
+          });
+          if (isFocus) {
+            pl.bringToFront();
+            startFocusRouteAnim(pl);
+          }
+          return;
+        }
+
+        var inPreset = activeDays.indexOf(d) !== -1;
+        if (!inPreset) {
+          routeGroup.removeLayer(pl);
+          return;
+        }
+        routeGroup.addLayer(pl);
+        pl.setStyle({
+          color: col,
+          weight: 9,
+          opacity: 0.96,
+          className: "",
+          dashArray: null,
+          dashOffset: null,
+          lineCap: "round",
+          lineJoin: "round"
+        });
+      });
+    }
+
+    function extendBoundsWithPlaces(bounds, dayMax) {
+      PLACES.forEach(function (p) {
+        if (dayMax !== null && p.day > dayMax) return;
+        if (activeDays !== null && selectedFocusDay === null && activeDays.indexOf(p.day) === -1) return;
+        if (selectedFocusDay !== null && p.day > selectedFocusDay) return;
+        /* Days 1 & 12 are Gujarat; including them with a mountain-leg day (2–11) forces fitBounds to all-India zoom. */
+        if (
+          selectedFocusDay !== null &&
+          selectedFocusDay >= 2 &&
+          selectedFocusDay <= 11 &&
+          (p.day === 1 || p.day === 12)
+        ) {
+          return;
+        }
+        bounds.extend([p.lat, p.lng]);
+      });
+    }
+
+    function flyOrFitBounds(paddedBounds, maxZoom, duration) {
+      if (!map) return;
+      if (!paddedBounds || !paddedBounds.isValid()) {
+        map.setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
+        return;
+      }
+      var mz = maxZoom != null ? maxZoom : 10;
+      var useAnimate = !prefersReducedMotion() && duration > 0;
+      try {
+        map.fitBounds(paddedBounds, {
+          padding: [20, 20],
+          maxZoom: mz,
+          animate: useAnimate
+        });
+      } catch (e) {
+        map.setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
+      }
+    }
+
+    function fitMapToView() {
+      if (!map) return;
+      var bounds = L.latLngBounds();
+
+      if (activeDays === null) {
+        Object.keys(ROUTES).forEach(function (ds) {
+          ROUTES[parseInt(ds, 10)].forEach(function (c) {
+            bounds.extend([c[0], c[1]]);
+          });
+        });
+        extendBoundsWithPlaces(bounds, null);
+        if (bounds.isValid()) {
+          flyOrFitBounds(bounds.pad(0.08), 8, 0.85);
+        } else {
+          map.setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
+        }
+        return;
+      }
+
+      if (selectedFocusDay !== null) {
+        for (var d = 2; d <= selectedFocusDay; d++) {
+          if (ROUTES[d]) {
+            ROUTES[d].forEach(function (c) {
+              bounds.extend([c[0], c[1]]);
+            });
+          }
+        }
+        extendBoundsWithPlaces(bounds, selectedFocusDay);
+        if (bounds.isValid()) {
+          flyOrFitBounds(bounds.pad(0.12), 11, 0.95);
+        } else {
+          var dayPlaces = PLACES.filter(function (p) {
+            return p.day === selectedFocusDay;
+          });
+          if (dayPlaces.length) {
+            map.setView([dayPlaces[0].lat, dayPlaces[0].lng], 10);
+          } else {
+            map.setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
+          }
+        }
+        return;
+      }
+
+      activeDays.forEach(function (d) {
+        if (ROUTES[d]) {
+          ROUTES[d].forEach(function (c) {
+            bounds.extend([c[0], c[1]]);
+          });
+        }
+      });
+      PLACES.forEach(function (p) {
+        if (activeDays.indexOf(p.day) !== -1) {
+          bounds.extend([p.lat, p.lng]);
+        }
+      });
+      if (bounds.isValid()) {
+        flyOrFitBounds(bounds.pad(0.1), 9, 0.88);
+      } else {
+        map.setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
+      }
+    }
+
+    function sameDaySet(a, b) {
+      if (!a || !b || a.length !== b.length) return false;
+      var x = a.slice().sort(function (u, v) { return u - v; });
+      var y = b.slice().sort(function (u, v) { return u - v; });
+      for (var i = 0; i < x.length; i++) {
+        if (x[i] !== y[i]) return false;
+      }
+      return true;
+    }
+
+    function setDayFilter(days, singleDay) {
+      activeDays = days;
+      selectedFocusDay = typeof singleDay === "number" ? singleDay : null;
+
+      syncMarkers();
+
+      document.querySelectorAll(".day-chips button").forEach(function (btn) {
+        var on = false;
+        if (days === null) on = btn.id === "chip-all";
+        else if (btn.dataset.days) {
+          var preset = btn.dataset.days.split(",").map(Number);
+          on = sameDaySet(days, preset);
+        } else if (btn.dataset.day) {
+          var d = parseInt(btn.dataset.day, 10);
+          on = days.length === 1 && days[0] === d && selectedFocusDay === d;
+        }
+        btn.classList.toggle("active", on);
+      });
+
+      updateRouteStyles();
+      renderDayList();
+      syncMobileMapFocus();
+      scheduleFitMap();
+      setTimeout(function () {
+        invalidateMapSize();
+        fitMapToView();
+      }, 320);
+    }
+
+    function renderDayList() {
+      var el = document.getElementById("dayList");
+      el.innerHTML = "";
+      var daysToShow;
+      if (activeDays === null) {
+        daysToShow = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+      } else if (selectedFocusDay !== null) {
+        daysToShow = [selectedFocusDay];
+      } else {
+        daysToShow = activeDays.slice().sort(function (a, b) { return a - b; });
+      }
+      var src = typeof DAY_ITINERARY !== "undefined" ? DAY_ITINERARY : {};
+      daysToShow.forEach(function (d) {
+        var section = document.createElement("section");
+        section.className = "itinerary-day";
+        var h = document.createElement("h3");
+        h.textContent = "Day " + d;
+        section.appendChild(h);
+        var leg = ROUTE_LEG_META[d];
+        if (leg) {
+          var metaBox = document.createElement("div");
+          metaBox.className = "route-leg-meta";
+          var main = document.createElement("div");
+          main.className = "route-leg-main";
+          main.textContent = leg.path + " · " + leg.km + " · " + leg.time;
+          metaBox.appendChild(main);
+          if (leg.note) {
+            var noteEl = document.createElement("div");
+            noteEl.className = "route-leg-note";
+            noteEl.textContent = leg.note;
+            metaBox.appendChild(noteEl);
+          }
+          section.appendChild(metaBox);
+        }
+        var body = document.createElement("div");
+        body.className = "itinerary-body";
+        body.innerHTML = src[d] || "Add this day in itinerary.js (DAY_ITINERARY[" + d + "]).";
+        section.appendChild(body);
+        var places = PLACES.filter(function (p) { return p.day === d; });
+        if (places.length) {
+          var pl = document.createElement("div");
+          pl.className = "itinerary-places";
+          var lead = document.createElement("span");
+          lead.textContent = "On the map — tap for photos & location: ";
+          pl.appendChild(lead);
+          places.forEach(function (p, i) {
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "place-link";
+            btn.textContent = p.name;
+            btn.addEventListener("click", function () {
+              openModal(p);
+              if (map) {
+                map.setView([p.lat, p.lng], Math.max(map.getZoom(), 13), { animate: true });
+              }
+            });
+            pl.appendChild(btn);
+            if (i < places.length - 1) pl.appendChild(document.createTextNode(" · "));
+          });
+          section.appendChild(pl);
+        }
+        el.appendChild(section);
+      });
+    }
+
+    function initMap() {
+      var satellite = L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        {
+          maxZoom: 19,
+          attribution: 'Satellite: &copy; <a href="https://www.esri.com/">Esri</a>'
+        }
+      );
+
+      var terrain = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+        maxZoom: 17,
+        subdomains: "abc",
+        attribution: 'Terrain: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
+      });
+
+      var street = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      });
+
+      map = L.map("map", {
+        center: [31.9, 76.4],
+        zoom: 7,
+        layers: [satellite]
+      });
+
+      L.control
+        .layers(
+          {
+            "Satellite (Esri)": satellite,
+            "Terrain (OpenTopoMap)": terrain,
+            "Street (OSM)": street
+          },
+          {},
+          { position: "topright", collapsed: false }
+        )
+        .addTo(map);
+
+      routeGroup = L.layerGroup().addTo(map);
+      markerGroup = L.layerGroup().addTo(map);
+
+      buildPolylines();
+      buildMarkers();
+
+      document.getElementById("modalClose").addEventListener("click", closeModal);
+      document.getElementById("modal").addEventListener("click", function (e) {
+        if (e.target === this) closeModal();
+      });
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") {
+          closeModal();
+          return;
+        }
+        onGalleryKeydown(e);
+      });
+
+      document.getElementById("galleryPrev").addEventListener("click", function (e) {
+        e.stopPropagation();
+        galleryGo(-1);
+      });
+      document.getElementById("galleryNext").addEventListener("click", function (e) {
+        e.stopPropagation();
+        galleryGo(1);
+      });
+      var gvp = document.getElementById("galleryViewport");
+      gvp.addEventListener(
+        "touchstart",
+        function (e) {
+          if (e.touches.length === 1) galleryState.touchStartX = e.touches[0].clientX;
+        },
+        { passive: true }
+      );
+      gvp.addEventListener(
+        "touchend",
+        function (e) {
+          if (galleryState.touchStartX == null) return;
+          var x = e.changedTouches[0].clientX;
+          var dx = x - galleryState.touchStartX;
+          galleryState.touchStartX = null;
+          if (Math.abs(dx) < 45) return;
+          if (dx > 0) galleryGo(-1);
+          else galleryGo(1);
+        },
+        { passive: true }
+      );
+
+      var chips = document.getElementById("dayChips");
+      var allBtn = document.createElement("button");
+      allBtn.id = "chip-all";
+      allBtn.textContent = "All days";
+      allBtn.type = "button";
+      allBtn.addEventListener("click", function () { setDayFilter(null, null); });
+      chips.appendChild(allBtn);
+
+      for (var d = 1; d <= 12; d++) {
+        (function (dayNum) {
+          var b = document.createElement("button");
+          b.type = "button";
+          b.dataset.day = String(dayNum);
+          b.textContent = "Day " + dayNum;
+          b.addEventListener("click", function () { setDayFilter([dayNum], dayNum); });
+          chips.appendChild(b);
+        })(d);
+      }
+
+      var multiBtn = document.createElement("button");
+      multiBtn.type = "button";
+      multiBtn.dataset.days = "2,3,4";
+      multiBtn.textContent = "D2–D4 (Punjab → Dalhousie)";
+      multiBtn.addEventListener("click", function () { setDayFilter([2, 3, 4], null); });
+      chips.appendChild(multiBtn);
+
+      var trekBtn = document.createElement("button");
+      trekBtn.type = "button";
+      trekBtn.dataset.days = "6,7,8";
+      trekBtn.textContent = "Bhrigu trek (D6–8)";
+      trekBtn.addEventListener("click", function () { setDayFilter([6, 7, 8], null); });
+      chips.appendChild(trekBtn);
+
+      var resizeFitTimer = null;
+      function onResizeRefit() {
+        invalidateMapSize();
+        fitMapToView();
+      }
+      window.addEventListener("resize", function () {
+        invalidateMapSize();
+        if (resizeFitTimer) clearTimeout(resizeFitTimer);
+        resizeFitTimer = setTimeout(function () {
+          resizeFitTimer = null;
+          onResizeRefit();
+        }, 100);
+      });
+      window.addEventListener("orientationchange", function () {
+        setTimeout(function () {
+          invalidateMapSize();
+          scheduleFitMap();
+        }, 400);
+      });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", function () {
+          invalidateMapSize();
+          if (resizeFitTimer) clearTimeout(resizeFitTimer);
+          resizeFitTimer = setTimeout(function () {
+            resizeFitTimer = null;
+            onResizeRefit();
+          }, 100);
+        });
+      }
+
+      var mobileItineraryToggle = document.getElementById("mobileItineraryToggle");
+      if (mobileItineraryToggle) {
+        mobileItineraryToggle.addEventListener("click", function () {
+          var layout = document.querySelector(".layout");
+          if (layout) layout.classList.remove("mobile-map-focus");
+          setTimeout(function () {
+            invalidateMapSize();
+            fitMapToView();
+          }, 350);
+          var dayListEl = document.getElementById("dayList");
+          if (dayListEl) {
+            dayListEl.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        });
+      }
+
+      setDayFilter(null, null);
+      setTimeout(function () {
+        invalidateMapSize();
+        scheduleFitMap();
+      }, 200);
+      window.addEventListener("load", function () {
+        setTimeout(function () {
+          invalidateMapSize();
+          fitMapToView();
+        }, 80);
+      });
+    }
+
+    initMap();
+  </script>
+</body>
+</html>

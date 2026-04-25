@@ -1,1 +1,1 @@
-# himaliyas
+# SPITI
